@@ -98,3 +98,58 @@ app.post("/chatwork/webhook", async (req, res) => {
 
     if (config.replyEnabled && results.some((result) => result.pageUrl)) {
       const lines = results
+        .filter((result) => result.pageUrl)
+        .map((result) => `Notionに保存しました: ${result.pageUrl}`);
+      await postMessage({
+        apiToken: config.chatworkApiToken,
+        roomId,
+        body: lines.join("\n")
+      });
+    }
+
+    res.json({ ok: true, results });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+function verifyWebhook(req) {
+  if (!config.chatworkWebhookToken) return;
+  const signature = req.get("x-chatworkwebhooksignature") || req.query.chatwork_webhook_signature;
+  const secret = Buffer.from(config.chatworkWebhookToken, "base64");
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(req.rawBody || "")
+    .digest("base64");
+
+  if (!signature || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) {
+    const error = new Error("invalid webhook token");
+    error.statusCode = 401;
+    throw error;
+  }
+}
+
+function requireConfig() {
+  const missing = Object.entries({
+    CHATWORK_API_TOKEN: config.chatworkApiToken,
+    NOTION_API_KEY: config.notionApiKey,
+    NOTION_CORPORATION_DATA_SOURCE_ID: config.corporationDataSourceId,
+    NOTION_MONTHLY_REPORT_DATA_SOURCE_ID: config.monthlyReportDataSourceId
+  })
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+
+  if (missing.length > 0) {
+    throw new Error(`Missing environment variables: ${missing.join(", ")}`);
+  }
+}
+
+function isPdf(fileInfo) {
+  const name = fileInfo.filename || fileInfo.name || "";
+  return /\.pdf$/i.test(name);
+}
+
+app.listen(config.port, () => {
+  console.log(`Chatwork to Notion importer listening on ${config.port}`);
+});
