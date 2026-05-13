@@ -98,3 +98,57 @@ function buildMonthlyReportProperties(corporationPage, report) {
           ]
         }
       : undefined
+  };
+
+  if (report.period) {
+    properties["対象月"] = { date: { start: report.period } };
+  }
+
+  return Object.fromEntries(Object.entries(properties).filter(([, value]) => value !== undefined));
+}
+
+function buildReportTitle(report) {
+  const name = report.shortName || report.corporationName || "法人未判定";
+  const ym = formatPeriod(report.period);
+  return `${name} ${ym} ${report.reportType || "月次報告"}`;
+}
+
+function formatPeriod(period) {
+  if (!period) return "年月未判定";
+  const match = period.match(/^(\d{4})-(\d{2})/);
+  if (!match) return period;
+  return `${match[1]}年${Number(match[2])}月`;
+}
+
+function title(content) {
+  return { title: [{ text: { content } }] };
+}
+
+function richText(content) {
+  return { rich_text: [{ text: { content: String(content || "") } }] };
+}
+
+function select(name) {
+  return { select: { name } };
+}
+
+function paragraph(content) {
+  return {
+    object: "block",
+    type: "paragraph",
+    paragraph: {
+      rich_text: [{ type: "text", text: { content } }]
+    }
+  };
+}
+
+function pdfBlock(fileUploadId) {
+  return {
+    object: "block",
+    type: "pdf",
+    pdf: {
+      type: "file_upload",
+      file_upload: { id: fileUploadId }
+    }
+  };
+}
