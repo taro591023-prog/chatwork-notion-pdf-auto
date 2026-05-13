@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "node:crypto";
 import {
   downloadFile,
   extractDownloadFileIds,
@@ -16,7 +17,12 @@ import {
 import { parseReportFileName } from "./parser.js";
 
 const app = express();
-app.use(express.json({ limit: "2mb" }));
+app.use(express.json({
+  limit: "2mb",
+  verify: (req, _res, buf) => {
+    req.rawBody = buf.toString("utf8");
+  }
+}));
 
 const config = {
   port: Number(process.env.PORT || 8080),
@@ -92,52 +98,3 @@ app.post("/chatwork/webhook", async (req, res) => {
 
     if (config.replyEnabled && results.some((result) => result.pageUrl)) {
       const lines = results
-        .filter((result) => result.pageUrl)
-        .map((result) => `Notionに保存しました: ${result.pageUrl}`);
-      await postMessage({
-        apiToken: config.chatworkApiToken,
-        roomId,
-        body: lines.join("\n")
-      });
-    }
-
-    res.json({ ok: true, results });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ ok: false, error: error.message });
-  }
-});
-
-function verifyWebhook(req) {
-  if (!config.chatworkWebhookToken) return;
-  const token = req.get("X-ChatWorkWebhookToken") || req.get("X-ChatWork-Webhook-Token");
-  if (token !== config.chatworkWebhookToken) {
-    const error = new Error("invalid webhook token");
-    error.statusCode = 401;
-    throw error;
-  }
-}
-
-function requireConfig() {
-  const missing = Object.entries({
-    CHATWORK_API_TOKEN: config.chatworkApiToken,
-    NOTION_API_KEY: config.notionApiKey,
-    NOTION_CORPORATION_DATA_SOURCE_ID: config.corporationDataSourceId,
-    NOTION_MONTHLY_REPORT_DATA_SOURCE_ID: config.monthlyReportDataSourceId
-  })
-    .filter(([, value]) => !value)
-    .map(([key]) => key);
-
-  if (missing.length > 0) {
-    throw new Error(`Missing environment variables: ${missing.join(", ")}`);
-  }
-}
-
-function isPdf(fileInfo) {
-  const name = fileInfo.filename || fileInfo.name || "";
-  return /\.pdf$/i.test(name);
-}
-
-app.listen(config.port, () => {
-  console.log(`Chatwork to Notion importer listening on ${config.port}`);
-});
